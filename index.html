@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>锦鲤拼版助手 · 网页版</title>
+<meta name="description" content="在线拼版计算工具 — 输入款号与数量，AI自动给出最优拼版方案。支持1-4版拼版、Excel/PDF导出。">
+<link rel="icon" type="image/png" href="icon-512.png">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#F3F0FC;--surface:rgba(255,255,255,0.78);
+  --ink:#2C2848;--ink2:#5E5880;--muted:#8C87A8;--dim:#C4C0D8;
+  --purple:#8B6FE8;--pink:#E87BA0;--blue:#6BA8E8;--teal:#6EC8B8;--coral:#E8957B;--red:#E8627B;--green:#5EC890;
+  --font:-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;--mono:'SF Mono','Cascadia Code',Consolas,monospace;
+}
+html,body{height:100%;overflow:hidden;font-family:var(--font);color:var(--ink);font-size:13px;-webkit-font-smoothing:antialiased}
+body{background:var(--bg)}
+body::before{content:'';position:fixed;top:-15%;right:-10%;width:55%;height:60%;z-index:0;pointer-events:none;background:radial-gradient(ellipse at 60% 40%,rgba(107,168,232,0.25) 0%,rgba(152,200,240,0.15) 30%,rgba(255,255,255,0.3) 55%,transparent 75%);border-radius:40%}
+body::after{content:'';position:fixed;bottom:-10%;left:-8%;width:50%;height:50%;z-index:0;pointer-events:none;background:radial-gradient(ellipse at 40% 60%,rgba(139,111,232,0.25) 0%,rgba(184,152,240,0.15) 30%,rgba(255,255,255,0.3) 55%,transparent 75%);border-radius:40%}
+.app{position:relative;z-index:5;display:flex;height:100vh}
+.app::before{content:'';position:fixed;top:-5%;left:-5%;width:30%;height:35%;z-index:0;pointer-events:none;background:radial-gradient(ellipse at 30% 30%,rgba(152,200,240,0.12) 0%,rgba(255,255,255,0.2) 40%,transparent 70%)}
+.app::after{content:'';position:fixed;bottom:-5%;right:-5%;width:35%;height:40%;z-index:0;pointer-events:none;background:radial-gradient(ellipse at 60% 70%,rgba(184,152,240,0.12) 0%,rgba(255,255,255,0.2) 40%,transparent 70%)}
+.grain{position:fixed;inset:0;z-index:2;pointer-events:none;opacity:.018;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+.sidebar{width:120px;display:flex;flex-direction:column;align-items:stretch;padding:20px 12px;flex-shrink:0;gap:6px;position:relative;z-index:10}
+.sb-logo{width:60px;height:60px;border-radius:16px;display:block;margin:0 auto 24px;object-fit:contain;background:#fff;padding:4px;box-shadow:0 4px 16px rgba(0,0,0,0.08)}
+.sb-item{width:100%;height:40px;border-radius:10px;display:flex;align-items:center;gap:10px;padding:0 14px;color:var(--ink2);cursor:pointer;font-size:12px;transition:all 0.2s;font-weight:500;position:relative}
+.sb-item:hover{background:rgba(255,255,255,0.5);color:var(--ink)}
+.sb-item.active{background:rgba(255,255,255,0.7);color:var(--ink);box-shadow:0 2px 10px rgba(139,111,232,0.12);font-weight:600}
+.sb-item.active::before{content:'';position:absolute;left:0;width:3px;height:20px;background:var(--purple);border-radius:2px}
+.sb-item-icon{font-size:15px;flex-shrink:0;width:18px;text-align:center}
+.sb-item-text{font-size:12px}
+.sb-bottom{margin-top:auto}
+
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;border-radius:22px 0 0 0;background:rgba(255,255,255,0.42);backdrop-filter:blur(50px);margin:14px 14px 14px 0;box-shadow:0 8px 40px rgba(0,0,0,0.07),0 2px 8px rgba(0,0,0,0.04);border:1px solid rgba(255,255,255,0.55);position:relative;z-index:10}
+
+.topbar{display:flex;align-items:center;padding:12px 24px;flex-shrink:0;gap:18px}
+.tb-greet{font-size:12px;color:var(--ink2);line-height:1.4}
+.tb-greet b{display:block;color:var(--ink);font-weight:600;font-size:13px}
+.tb-spacer{flex:1}
+.tb-nav{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.55);border-radius:20px;padding:4px;backdrop-filter:blur(20px);box-shadow:0 1px 4px rgba(0,0,0,0.04)}
+.tb-ni{padding:6px 14px;font-size:12px;color:var(--ink2);cursor:pointer;border-radius:16px;font-weight:500;position:relative;transition:all 0.15s}
+.tb-ni:hover{color:var(--ink)}.tb-ni.active{background:rgba(255,255,255,0.9);color:var(--ink);box-shadow:0 2px 10px rgba(0,0,0,0.06);font-weight:600}
+
+.hero{padding:2px 24px 10px;flex-shrink:0}
+.hero-t{font-size:25px;font-weight:700;letter-spacing:-0.02em;line-height:1.1}
+.hero-s{font-size:11px;color:var(--ink2);margin-top:3px}
+.hero-actions{display:flex;gap:6px;margin-top:8px}
+.ha-btn{padding:6px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.5);background:rgba(255,255,255,0.6);color:var(--ink2);font-size:11px;font-weight:500;cursor:pointer;transition:all 0.15s;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+.ha-btn:hover{background:rgba(255,255,255,0.9);color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,0.08)}
+.ha-btn.primary{background:var(--purple);color:#fff;border-color:var(--purple);box-shadow:0 2px 10px rgba(139,111,232,0.25)}
+.ha-btn.primary:hover{background:#7c5fd8;box-shadow:0 4px 16px rgba(139,111,232,0.35)}
+.ha-btn.danger{background:rgba(255,255,255,0.5);color:var(--red);border-color:rgba(232,98,123,0.3)}
+.ha-btn.danger:hover{background:rgba(232,98,123,0.08);box-shadow:0 2px 8px rgba(232,98,123,0.15)}
+
+.workspace{flex:1;display:grid;grid-template-columns:300px 1fr 300px;gap:12px;padding:0 24px 24px;overflow:hidden;min-height:0}
+
+.card{background:var(--surface);backdrop-filter:blur(25px);border-radius:16px;padding:14px;border:1px solid rgba(255,255,255,0.65);box-shadow:0 4px 20px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.04),inset 0 1px 0 rgba(255,255,255,0.6);position:relative;overflow:hidden}
+.card-t{font-size:10px;font-weight:600;color:var(--ink2);margin-bottom:12px;display:flex;align-items:center;gap:6px;letter-spacing:0.05em;text-transform:uppercase}
+.card-t::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--purple)}
+.left-col,.right-col{display:flex;flex-direction:column;gap:8px;overflow:hidden;min-height:0}
+.left-col .card,.right-col .card{flex:1;display:flex;flex-direction:column;min-height:0;padding:16px}
+.left-col .card.calc-card{flex:0 0 auto;padding:14px}
+
+.item-list{flex:1;overflow-y:auto;padding-right:4px;min-height:0}
+.item-list::-webkit-scrollbar{width:3px}
+.item-list::-webkit-scrollbar-thumb,.card-body::-webkit-scrollbar-thumb,.board-area::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.1);border-radius:2px}
+.item-row{display:flex;align-items:center;gap:6px;padding:6px 4px;border-radius:4px;transition:all 0.15s;margin-bottom:2px}
+.item-row:hover{background:rgba(139,111,232,0.06)}
+.item-row .i{font-size:11px;color:var(--muted);width:18px;font-family:var(--mono);text-align:center;flex-shrink:0}
+.item-row .nm{flex:1;padding:4px 8px;border:1px solid transparent;background:transparent;border-radius:4px;font-size:13px;color:var(--ink);transition:all 0.15s;min-width:0}
+.item-row .nm:focus{outline:none;background:rgba(255,255,255,0.7);border-color:rgba(139,111,232,0.3);box-shadow:0 0 0 2px rgba(139,111,232,0.08)}
+.item-row .qt{width:64px;padding:4px 6px;border:1px solid transparent;background:transparent;border-radius:4px;font-size:13px;font-family:var(--mono);text-align:right;color:var(--ink);transition:all 0.15s;flex-shrink:0;direction:rtl}
+.item-row .qt::-webkit-input-placeholder{color:var(--dim)}
+.item-row .qt:focus{outline:none;background:rgba(255,255,255,0.7);border-color:rgba(139,111,232,0.3);box-shadow:0 0 0 2px rgba(139,111,232,0.08)}
+.item-row .qt.f{color:var(--purple);font-weight:600}
+.item-row .del{width:16px;height:16px;border:none;background:transparent;color:var(--dim);cursor:pointer;border-radius:3px;font-size:11px;transition:all 0.15s;flex-shrink:0;line-height:1}
+.item-row .del:hover{background:rgba(232,98,123,0.1);color:var(--red)}
+.ls{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px;background:linear-gradient(135deg,rgba(139,111,232,0.08),rgba(232,123,160,0.08));border-radius:10px;margin-top:8px}
+.ls-i{text-align:center}.ls-l{font-size:9px;color:var(--ink2);margin-bottom:1px}
+.ls-v{font-size:15px;font-weight:700;font-family:var(--mono)}.ls-v.p{color:var(--purple)}.ls-v.r{color:var(--pink)}
+
+.ctrl-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0}
+.ctrl-row .l{font-size:11px;color:var(--ink2)}.ctrl-row .r{display:flex;align-items:center;gap:4px}
+.cp{background:rgba(255,255,255,0.85);border:1px solid rgba(0,0,0,0.05);border-radius:12px;padding:2px 6px;font-size:11px;font-family:var(--mono);font-weight:600;color:var(--purple);min-width:40px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.03);width:60px;outline:none;transition:all 0.15s}
+.cp:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(139,111,232,0.15)}
+.cp.b{color:var(--blue)}.cp.t{color:var(--teal)}.cp.c{color:var(--coral)}
+.cb{width:18px;height:18px;border:none;background:rgba(0,0,0,0.04);border-radius:4px;cursor:pointer;font-size:12px;color:var(--ink2)}
+.cb:hover{background:rgba(139,111,232,0.12);color:var(--purple)}
+
+.center-col{position:relative;display:flex;flex-direction:column;gap:10px;overflow:hidden;min-height:0}
+.center-hero{flex:1;position:relative;display:flex;align-items:center;justify-content:center;min-height:0;perspective:900px;overflow:hidden}
+.center-glow{position:absolute;width:130px;height:130px;border-radius:50%;background:radial-gradient(circle,rgba(139,111,232,0.12) 0%,rgba(107,168,232,0.06) 40%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:glP 4s ease-in-out infinite}
+@keyframes glP{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.7}50%{transform:translate(-50%,-50%) scale(1.3);opacity:.4}}
+
+.fdot{position:absolute;border-radius:50%;animation:fdF 5s ease-in-out infinite}
+.fdot-1{width:10px;height:10px;top:20%;left:16%;background:var(--pink);box-shadow:0 0 14px rgba(232,123,160,.5)}
+.fdot-2{width:8px;height:8px;top:72%;right:16%;background:var(--blue);box-shadow:0 0 14px rgba(107,168,232,.5);animation-delay:1.5s}
+.fdot-3{width:6px;height:6px;top:44%;left:18%;background:var(--teal);box-shadow:0 0 10px rgba(110,200,184,.5);animation-delay:3s}
+.fdot-4{width:9px;height:9px;bottom:22%;right:20%;background:var(--coral);box-shadow:0 0 12px rgba(232,149,123,.5);animation-delay:4s}
+.fdot-5{width:7px;height:7px;top:52%;right:17%;background:var(--purple);box-shadow:0 0 12px rgba(139,111,232,.5);animation-delay:2s}
+@keyframes fdF{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-12px) scale(1.3)}}
+
+/* Top row small cards + bottom large card */
+.sol-stage{position:relative;width:100%;height:100%;display:flex;flex-direction:column;gap:10px}
+.sol-row{display:flex;gap:12px;justify-content:center;flex-shrink:0;padding:0 16px 4px;position:relative;z-index:5}
+.sol-card{position:relative;background:linear-gradient(135deg,rgba(255,255,255,0.95),rgba(255,255,255,0.85));backdrop-filter:blur(16px);border-radius:14px;padding:12px 14px;border:1px solid rgba(255,255,255,0.7);box-shadow:0 6px 20px rgba(0,0,0,0.06),0 2px 6px rgba(0,0,0,0.03);cursor:pointer;z-index:5;transition:all 0.4s cubic-bezier(.22,1,.36,1);min-width:0;flex:1 1 0;max-width:180px}
+.sol-card:hover{box-shadow:0 12px 36px rgba(0,0,0,0.1);z-index:7}
+.sol-card.active{border-color:rgba(94,200,144,0.5);box-shadow:0 8px 28px rgba(94,200,144,0.18),0 0 0 2px rgba(94,200,144,0.15);background:linear-gradient(135deg,rgba(255,255,255,1),rgba(255,255,255,0.9))}
+.sol-card.empty{opacity:0.35;cursor:not-allowed;background:rgba(255,255,255,0.5)}
+.sol-card.animating{transition:all 0.45s cubic-bezier(.22,1,.36,1)}
+.sol-card.expand-target{position:absolute;top:0;left:50%;transform:translateX(-50%) scale(0.85);opacity:0;pointer-events:none;width:460px;padding:0;min-width:0;border:none;background:transparent;box-shadow:none;backdrop-filter:none}
+
+.sol-card .sc-badge{position:absolute;bottom:-8px;right:12px;padding:3px 8px;border-radius:8px;font-size:9px;font-weight:700;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,0.2);z-index:10}
+.sol-card .sc-badge.g{background:var(--green)}.sol-card .sc-badge.r{background:var(--red)}
+.sol-card .sc-header{display:flex;flex-direction:column;align-items:center;gap:4px}
+.sol-card .sc-title{font-size:13px;font-weight:700;color:var(--ink)}
+.sol-card .sc-sub{font-size:10px;font-family:var(--mono);color:var(--muted);text-align:center;line-height:1.4}
+.sol-card .sc-sub b{color:var(--ink);font-weight:600;font-size:11px}
+
+/* Large expanded card - fills the space */
+.sol-expand{flex:1;display:flex;align-items:stretch;justify-content:center;min-height:0;position:relative;padding:0 14px 14px}
+.sol-main{position:relative;background:linear-gradient(135deg,rgba(255,255,255,0.98),rgba(255,255,255,0.92));backdrop-filter:blur(20px);border-radius:22px;padding:32px 40px;border:1px solid rgba(255,255,255,0.7);box-shadow:0 20px 60px rgba(0,0,0,0.1),0 6px 20px rgba(0,0,0,0.05);width:100%;max-height:100%;animation:smAppear 0.45s cubic-bezier(.22,1,.36,1);overflow:auto;display:flex;flex-direction:column}
+@keyframes smAppear{from{opacity:0;transform:scale(0.94)}to{opacity:1;transform:scale(1)}}
+.sol-main .sm-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid rgba(0,0,0,0.06);flex-shrink:0}
+.sol-main .sm-title{font-size:22px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:10px}
+.sol-main .sm-title::before{content:'';width:5px;height:22px;background:var(--green);border-radius:3px;box-shadow:0 0 12px rgba(94,200,144,0.4)}
+.sol-main .sm-meta{font-size:14px;font-family:var(--mono);color:var(--ink2)}
+.sol-main .sm-meta b{color:var(--green);font-weight:700;font-size:18px}
+.sol-main .sm-boards{display:flex;flex-direction:column;gap:14px;flex:1;overflow-y:auto;min-height:0}
+.sc-board{background:rgba(255,255,255,0.75);border-radius:14px;padding:16px 20px;border:1px solid rgba(0,0,0,0.05);box-shadow:0 2px 6px rgba(0,0,0,0.03)}
+.scb-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(0,0,0,0.06)}
+.scb-name{font-size:20px;font-weight:700;display:flex;align-items:center;gap:12px;color:var(--ink)}
+.scb-dot{width:12px;height:12px;border-radius:50%;box-shadow:0 0 10px currentColor}
+.scb-tag{font-size:20px;font-weight:700;color:var(--ink);font-family:var(--mono);padding:0}
+.scb-tag small{font-size:13px;color:var(--ink2);font-weight:500;margin-right:4px}
+.scb-table{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:1px;background:rgba(0,0,0,0.06);border-radius:10px;overflow:hidden;border:1px solid rgba(0,0,0,0.06)}
+.scb-th,.scb-td{padding:8px 12px;background:rgba(255,255,255,0.85)}
+.scb-th{font-size:10px;color:var(--ink2);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.05em;font-weight:600}
+.scb-td{font-size:13px;font-family:var(--mono);color:var(--ink2);display:flex;align-items:center;gap:6px;border-top:1px solid rgba(0,0,0,0.03)}
+.scb-td:first-child{color:var(--ink);font-weight:600;font-family:var(--font);font-size:14px}
+.scb-td-col{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.03em;margin-bottom:1px}
+.scb-td-val{font-size:14px;font-weight:600;color:var(--ink);font-family:var(--mono);line-height:1}
+.scb-td-val.waste{color:var(--red)}
+.scb-td-val.ok{color:var(--green)}
+.scb-row{display:contents}
+.scb-row>div{padding:8px 12px;background:rgba(255,255,255,0.7);font-size:13px;font-family:var(--mono);color:var(--ink2);display:flex;align-items:center;gap:6px;border-top:1px solid rgba(0,0,0,0.03)}
+.scb-row>div:first-child{color:var(--ink);font-weight:600;font-family:var(--font);font-size:14px}
+
+/* KPI */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;flex-shrink:0}
+.kpi{padding:10px 12px;background:var(--surface);backdrop-filter:blur(25px);border-radius:12px;border:1px solid rgba(255,255,255,.5);box-shadow:0 2px 12px rgba(0,0,0,.05),0 1px 2px rgba(0,0,0,.03);transition:all .2s}
+.kpi:hover{box-shadow:0 4px 20px rgba(0,0,0,.08);transform:translateY(-1px)}
+.kpi-l{font-size:9px;color:var(--ink2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.kpi-v{font-size:18px;font-weight:700;font-family:var(--mono);line-height:1;letter-spacing:-.02em}
+.kpi-v.p{color:var(--purple)}.kpi-v.r{color:var(--pink)}.kpi-v.b{color:var(--blue)}.kpi-v.t{color:var(--teal)}
+
+.sol-tabs{display:flex;gap:3px;margin-bottom:10px;background:rgba(255,255,255,.4);border-radius:10px;padding:3px}
+.sol-tab{flex:1;padding:5px 4px;font-size:10px;font-weight:600;color:var(--ink2);cursor:pointer;border-radius:8px;transition:all .2s;text-align:center;display:flex;align-items:center;justify-content:center;gap:3px}
+.sol-tab:hover{color:var(--ink)}
+.sol-tab.active{background:rgba(255,255,255,.95);color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.sb{font-size:9px;padding:1px 5px;border-radius:6px;font-weight:600;font-family:var(--mono)}
+.sb.g{background:rgba(94,200,144,.15);color:var(--green)}.sb.w{background:rgba(232,149,123,.15);color:var(--coral)}.sb.bd{background:rgba(232,98,123,.12);color:var(--red)}
+
+.card-body{flex:1;overflow-y:auto;padding-right:4px;min-height:0}
+
+.ins{padding:7px 10px;background:rgba(255,255,255,.55);border-radius:10px;margin-bottom:5px;display:flex;align-items:center;gap:8px;box-shadow:0 1px 4px rgba(0,0,0,.03);transition:all .15s}
+.ins:hover{background:rgba(255,255,255,.75);box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.ins-i{width:24px;height:24px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+.ins-i.p{background:rgba(139,111,232,.12);color:var(--purple)}.ins-i.r{background:rgba(232,123,160,.12);color:var(--pink)}.ins-i.b{background:rgba(107,168,232,.12);color:var(--blue)}
+.ins-t{font-size:11px;color:var(--ink);font-weight:500;line-height:1.3}
+.ins-s{font-size:9px;color:var(--ink2);font-family:var(--mono);margin-top:1px}
+
+.bar{position:absolute;bottom:6px;left:80px;right:0;height:20px;display:flex;align-items:center;padding:0 24px;font-size:10px;color:var(--muted);gap:10px;pointer-events:none;z-index:20}
+.b-d{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green)}
+.b-s{flex:1}
+
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(44,40,72,0.9);color:#fff;padding:10px 24px;border-radius:10px;font-size:12px;font-weight:500;z-index:100;opacity:0;pointer-events:none;transition:opacity 0.3s;backdrop-filter:blur(10px)}
+.toast.show{opacity:1}
+@media print{.sidebar,.topbar,.hero,.bar,.kpi-row,.sol-row,.right-col,.left-col .calc-card{display:none!important}html,body{overflow:visible!important}.main{border-radius:0;box-shadow:none;margin:0;background:#fff}.workspace{grid-template-columns:1fr;padding:0}.center-hero{background:none}.sol-main{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="app">
+  <div class="sidebar">
+    <img src="icon-512.png" class="sb-logo" title="锦鲤拼版助手 · 网页版">
+    <div class="sb-item active" onclick="solve()"><span class="sb-item-icon">⚡</span><span class="sb-item-text">计算</span></div>
+    <div class="sb-item" onclick="save()"><span class="sb-item-icon">💾</span><span class="sb-item-text">保存</span></div>
+    <div class="sb-item" onclick="exportExcel()"><span class="sb-item-icon">📊</span><span class="sb-item-text">Excel</span></div>
+    <div class="sb-item" onclick="exportPDF()"><span class="sb-item-icon">📄</span><span class="sb-item-text">PDF</span></div>
+    <div class="sb-item" onclick="clearAll()"><span class="sb-item-icon">🗑</span><span class="sb-item-text">清空</span></div>
+  </div>
+  <div class="main">
+    <div class="topbar">
+      <div class="tb-greet"><b>锦鲤拼版助手 · 网页版</b></div>
+      <div class="tb-spacer"></div>
+      <div class="tb-nav"><div class="tb-ni active">拼版方案</div><div class="tb-ni" onclick="toast('历史记录功能开发中')">历史记录</div></div>
+    </div>
+    <div class="hero">
+      <div class="hero-t">今天拼哪几版</div>
+      <div class="hero-s">输入款号与数量，AI 自动给出 1–4 版最优拼版方案</div>
+      <div class="hero-actions">
+        <button class="ha-btn primary" onclick="solve()">⚡ 计算最优方案</button>
+        <button class="ha-btn" onclick="exportExcel()">📊 导出 Excel</button>
+        <button class="ha-btn" onclick="exportPDF()">📄 导出 PDF</button>
+        <button class="ha-btn" onclick="save()">💾 保存</button>
+        <button class="ha-btn danger" onclick="clearAll()">🗑 清空</button>
+      </div>
+    </div>
+    <div class="workspace">
+      <div class="left-col">
+        <div class="card calc-card"><div class="card-t">计算参数</div>
+          <div class="ctrl-row" style="padding:3px 0"><span class="l">单版模数</span><span class="r"><button class="cb" onclick="adj('mc',-1)">−</button><input type="number" class="cp" id="modCount" value="3" min="1" max="999" oninput="setMc(this.value)" onchange="setMc(this.value)"><button class="cb" onclick="adj('mc',1)">+</button></span></div>
+          <div class="ctrl-row" style="padding:3px 0"><span class="l">随机次数</span><span class="r"><button class="cb" onclick="adj('it',-100)">−</button><input type="number" class="cp c" id="iters" value="1000" min="100" max="99999" oninput="setIt(this.value)" onchange="setIt(this.value)"><button class="cb" onclick="adj('it',100)">+</button></span></div>
+          <div class="ctrl-row" style="padding:3px 0"><span class="l">算法模式</span><span class="r"><span class="cp t" style="min-width:auto;padding:3px 10px;cursor:default;width:auto">贪心+随机</span></span></div>
+          <div class="ctrl-row" style="padding:3px 0"><span class="l">填满模式</span><span class="r" style="gap:4px"><button id="btnFill" class="cb" style="width:auto;padding:3px 10px;border-radius:8px;background:rgba(139,111,232,0.12);color:var(--purple);font-weight:600;font-size:11px" onclick="setFill(true)">必须填满</button><button id="btnAllow" class="cb" style="width:auto;padding:3px 10px;border-radius:8px;font-size:11px" onclick="setFill(false)">可留空</button></span></div>
+        </div>
+        <div class="card"><div class="card-t">款号输入</div>
+          <div id="itemArea" style="flex:1;display:flex;flex-direction:column;min-height:0">
+            <div class="item-list" id="itemList"></div>
+            <div id="emptyHint" style="flex:1;display:none;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:20px 10px">
+              <div style="font-size:32px;opacity:0.3;margin-bottom:8px">📋</div>
+              <div style="font-size:11px;margin-bottom:12px">还没有款号，点击下方添加</div>
+            </div>
+          </div>
+          <button onclick="addItem('','')" style="margin-top:8px;padding:7px;border:1px dashed var(--dim);background:transparent;color:var(--ink2);font-size:12px;border-radius:6px;cursor:pointer;transition:all 0.15s" onmouseover="this.style.borderColor='var(--purple)';this.style.color='var(--purple)';this.style.background='rgba(139,111,232,0.04)'" onmouseout="this.style.borderColor='var(--dim)';this.style.color='var(--ink2)';this.style.background='transparent'">+ 新增款</button>
+          <div class="ls"><div class="ls-i"><div class="ls-l">总款数</div><div class="ls-v p" id="tI">0</div></div><div class="ls-i"><div class="ls-l">总数量</div><div class="ls-v r" id="tQ">0</div></div></div>
+        </div>
+      </div>
+      <div class="center-col">
+        <div class="center-hero" id="centerHero">
+          <div class="center-glow"></div>
+          <div class="fdot fdot-1"></div><div class="fdot fdot-2"></div><div class="fdot fdot-3"></div><div class="fdot fdot-4"></div><div class="fdot fdot-5"></div>
+          <div id="solutionStage" style="position:relative;width:100%;height:100%">
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--muted)">
+              <div style="font-size:48px;margin-bottom:8px;opacity:0.4">📐</div>
+              <div style="font-size:13px">输入款号后点"计算最优方案"</div>
+              <div style="font-size:10px;margin-top:4px;opacity:0.6">自动分析 1–4 版拼版策略</div>
+            </div>
+          </div>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi"><div class="kpi-l">总印张</div><div class="kpi-v p" id="kpiSheets">—</div></div>
+          <div class="kpi"><div class="kpi-l">总产出</div><div class="kpi-v b" id="kpiOutput">—</div></div>
+          <div class="kpi"><div class="kpi-l">浪费率</div><div class="kpi-v r" id="kpiWasteRate">—</div></div>
+          <div class="kpi"><div class="kpi-l">使用版</div><div class="kpi-v t" id="kpiBoards">—</div></div>
+        </div>
+      </div>
+      <div class="right-col">
+        <div class="card"><div class="card-t">智能洞察</div>
+          <div class="card-body" id="insights">
+            <div class="ins"><div class="ins-i b">ℹ</div><div><div class="ins-t">等待计算</div><div class="ins-s">点击"计算最优方案"开始分析</div></div></div>
+          </div>
+        </div>
+        <div class="card"><div class="card-t">版数对比</div>
+          <div class="sol-tabs" id="solTabs">
+            <div class="sol-tab active">1版<span class="sb bd">—</span></div>
+            <div class="sol-tab">2版<span class="sb bd">—</span></div>
+            <div class="sol-tab">3版<span class="sb bd">—</span></div>
+            <div class="sol-tab">4版<span class="sb bd">—</span></div>
+          </div>
+          <div class="card-body" id="solBoardList">
+            <div style="color:var(--muted);font-size:11px;text-align:center;padding:20px">选择方案后<br>这里显示版位详情</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="bar"><span class="b-d"></span> <span id="barStatus">就绪</span> <span class="b-s"></span> <span>锦鲤拼版助手 · 网页版</span></div>
+<div class="toast" id="toast"></div>
+<script>
+// ===== STATE =====
+var items=[],moduleCount=3,iterations=1000,solutions=[],activeSol=0,mustFill=true;
+const boardCost=200,sheetCost=0.08; // 制版费¥200/版 + 印刷费¥0.08/张
+const boardColors=['var(--red)','var(--blue)','var(--teal)','var(--coral)'];
+
+// ===== TOAST =====
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2000);}
+
+// ===== ITEM MANAGEMENT =====
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function addItem(n,q){
+  // Auto-name: find highest 款N
+  let maxN=0;
+  items.forEach(it=>{
+    const m=it.name&&it.name.match(/^款(\d+)$/);
+    if(m){maxN=Math.max(maxN,parseInt(m[1]));}
+  });
+  const newName=n||'款'+(maxN+1);
+  items.push({name:newName,qty:q||''});
+  renderItems();save();
+  setTimeout(()=>{
+    const qtyInput=document.querySelectorAll('#itemList .qt')[items.length-1];
+    if(qtyInput){qtyInput.focus();qtyInput.select();}
+  },50);
+}
+function removeItem(i){items.splice(i,1);renderItems();save();}
+function uNm(i,v){items[i].name=v;save();}
+function uQt(i,v,el){const q=parseInt(v);items[i].qty=(isNaN(q)||q<0)?'':q;if(el){el.value=items[i].qty;el.classList.toggle('f',!!items[i].qty)}updateSummary();save();}
+function renderItems(){
+  const lb=document.getElementById('itemList');
+  const hint=document.getElementById('emptyHint');
+  lb.innerHTML='';
+  items.forEach((it,i)=>{
+    const d=document.createElement('div');d.className='item-row';
+    d.innerHTML='<span class="i">'+(i+1)+'</span><input class="nm" value="'+esc(it.name||'')+'" placeholder="款名" onchange="uNm('+i+',this.value)" onkeydown="handleKey('+i+',\'name\',event)"><input type="number" class="qt'+(it.qty?' f':'')+'" value="'+(it.qty||'')+'" placeholder="0" oninput="uQt('+i+',this.value,this)" onfocus="this.select()" onkeydown="handleKey('+i+',\'qty\',event)"><button class="del" onclick="removeItem('+i+')">×</button>';
+    lb.appendChild(d);
+  });
+  hint.style.display=items.length===0?'flex':'none';
+  updateSummary();
+}
+function updateSummary(){
+  const v=items.filter(it=>it.qty>0);
+  document.getElementById('tI').textContent=v.length;
+  document.getElementById('tQ').textContent=v.reduce((s,i)=>s+parseInt(i.qty),0).toLocaleString();
+}
+function clearAll(){items=[];solutions=[];activeSol=0;renderItems();renderKPI();renderCenter();renderRight();save();toast('已清空');}
+
+// ===== KEYBOARD NAVIGATION (Enter from qty -> next row qty; last row -> new qty with auto-name) =====
+function handleKey(i,field,e){
+  if(e.key!=='Enter')return;
+  e.preventDefault();
+  if(field==='name'){
+    // Enter from name -> go to qty in same row
+    const qtyInput=document.querySelectorAll('#itemList .qt')[i];
+    if(qtyInput){qtyInput.focus();qtyInput.select();}
+  }else{
+    // Enter from qty -> go to next row's qty; if last, create new with auto-name
+    if(i+1<items.length){
+      const nextQty=document.querySelectorAll('#itemList .qt')[i+1];
+      if(nextQty){nextQty.focus();nextQty.select();}
+    }else{
+      // Auto-name: find highest 款N in existing list and increment
+      let maxN=0;
+      items.forEach(it=>{
+        const m=it.name&&it.name.match(/^款(\d+)$/);
+        if(m){maxN=Math.max(maxN,parseInt(m[1]));}
+      });
+      const newName='款'+(maxN+1);
+      items.push({name:newName,qty:''});
+      renderItems();save();
+      setTimeout(()=>{
+        const newQty=document.querySelectorAll('#itemList .qt')[items.length-1];
+        if(newQty)newQty.focus();
+      },50);
+    }
+  }
+}
+function adj(k,d){
+  if(k==='mc'){moduleCount=Math.max(1,Math.min(999,moduleCount+d));document.getElementById('modCount').value=moduleCount;save();}
+  if(k==='it'){iterations=Math.max(100,Math.min(99999,iterations+d));document.getElementById('iters').value=iterations;save();}
+}
+function setMc(v){const n=parseInt(v);if(n>=1&&n<=999){moduleCount=n;document.getElementById('modCount').value=moduleCount;save();}else{document.getElementById('modCount').value=moduleCount;}}
+function setIt(v){const n=parseInt(v);if(n>=100&&n<=99999){iterations=n;document.getElementById('iters').value=iterations;save();}else{document.getElementById('iters').value=iterations;}}
+function setFill(v){
+  mustFill=v;
+  const f=document.getElementById('btnFill'),a=document.getElementById('btnAllow');
+  f.style.background=v?'rgba(139,111,232,0.12)':'transparent';f.style.color=v?'var(--purple)':'var(--ink2)';f.style.fontWeight=v?'600':'400';
+  a.style.background=v?'transparent':'rgba(139,111,232,0.12)';a.style.color=v?'var(--ink2)':'var(--purple)';a.style.fontWeight=v?'400':'600';
+  save();
+}
+
+// ===== SOLVER =====
+function solve(){
+  if(window._computing)return;
+  // Sync inputs to items (in case DOM and state drifted)
+  document.querySelectorAll('#itemList .item-row').forEach((row,i)=>{
+    const nm=row.querySelector('.nm').value;
+    const qt=row.querySelector('.qt').value;
+    if(items[i]){
+      items[i].name=nm;
+      const q=parseInt(qt);
+      items[i].qty=(isNaN(q)||q<0)?'':q;
+    }
+  });
+  const valid=items.filter(it=>it.qty>0).map((it,i)=>({id:i+1,name:it.name||('款'+(i+1)),qty:parseInt(it.qty)}));
+  if(!valid.length){toast('请先输入至少一款');return;}
+  const mc=moduleCount,itn=iterations;
+  window._computing=true;
+  document.getElementById('barStatus').textContent='计算中...';
+  setTimeout(()=>{
+    const all=[];
+    for(let b=1;b<=4;b++){const s=optimize(valid,mc,b,itn);if(s&&s.feasible)all.push(s);}
+    // dedup: keep one solution per boardCount, but only collapse if N-board solution actually uses N-1 boards
+    const byBoards={};
+    for(const s of all){
+      const used=s.boards.filter(bb=>bb.items.length>0).length;
+      const key=used;
+      if(!byBoards[key]||s.totalSheets<byBoards[key].totalSheets){
+        byBoards[key]=s;
+      }
+    }
+    // keep only true 1/2/3/4-board solutions
+    const final=[];
+    for(let b=1;b<=4;b++){if(byBoards[b])final.push(byBoards[b]);}
+    solutions=final.sort((a,b)=>{
+      const ua=a.boards.filter(bb=>bb.items.length>0).length;
+      const ub=b.boards.filter(bb=>bb.items.length>0).length;
+      return ua-ub;
+    });
+    if(!solutions.length){toast('无可行的拼版方案');window._computing=false;return;}
+    activeSol=0;renderKPI();renderCenter();renderRight();
+    document.getElementById('barStatus').textContent='就绪';
+    toast('完成！共 '+solutions.length+' 套方案');
+    save();
+    window._computing=false;
+  },30);
+}
+
+// ===== MULTI-STRATEGY SOLVER (inspired by PrintNest) =====
+function optimize(items,mc,b,itn){
+  // Strategy 1: RoundRobin — sort by qty desc, distribute to boards in round-robin
+  const s1=runStrategy(items,mc,b,'roundrobin');
+  // Strategy 2: BigSmall — largest b-1 items solo, rest together
+  const s2=runStrategy(items,mc,b,'bigsmall');
+  // Strategy 3: SimilarQty — sort, alternate assign so nearby qty items share a board
+  const s3=runStrategy(items,mc,b,'similar');
+  // Strategy 4: Greedy (best board for each item)
+  const s4=runStrategy(items,mc,b,'greedy');
+  // Strategy 5: Random greedy x itn iterations
+  const s5=runStrategy(items,mc,b,'random',itn);
+  // Strategy 6: Random partition (completely random board assignment, no greedy)
+  const s6=runStrategy(items,mc,b,'partition',Math.min(itn,200));
+  // Pick best: min sheets, then min waste
+  const candidates=[s1,s2,s3,s4,s5,s6].filter(s=>s&&s.feasible);
+  if(!candidates.length)return {boardCount:b,boards:[],totalSheets:0,totalWaste:0,utilization:0,feasible:false};
+  candidates.sort((a,b)=>a.totalSheets!==b.totalSheets?a.totalSheets-b.totalSheets:a.totalWaste-b.totalWaste);
+  return candidates[0];
+}
+
+function runStrategy(items,mc,b,strategy,itn=1){
+  const iterations=strategy==='random'?itn:1;
+  let best=null,bs=Infinity,bw=Infinity;
+  for(let t=0;t<iterations;t++){
+    let sorted;
+    if(strategy==='roundrobin'){
+      sorted=[...items].sort((a,b)=>b.qty-a.qty);
+    }else if(strategy==='bigsmall'){
+      sorted=[...items].sort((a,b)=>b.qty-a.qty);
+      // First b-1 items each get their own board (the "big" ones), rest grouped
+    }else if(strategy==='similar'){
+      const a=[...items].sort((a,b)=>a.qty-b.qty);
+      sorted=[];
+      for(let k=0;k<a.length;k+=2){sorted.push(a[k]);if(k+1<a.length)sorted.push(a[k+1]);}
+      sorted=sorted.reverse();
+    }else if(strategy==='greedy'){
+      sorted=[...items].sort((a,b)=>b.qty-a.qty);
+    }else if(strategy==='partition'){
+      // Completely random board assignment, bypass greedy bias
+      sorted=[...items];
+    }else{
+      sorted=[...items].sort(()=>Math.random()-0.5);
+    }
+
+    const boards=Array.from({length:b},()=>({items:[],mods:0,sheets:0}));
+    let ok=true;
+
+    if(strategy==='bigsmall'&&items.length>=b){
+      // First b-1 items solo on first b-1 boards
+      for(let j=0;j<Math.min(b-1,items.length);j++){
+        const it=sorted[j];
+        if(mc<1){ok=false;break;}
+        boards[j].items.push({...it,mods:1});boards[j].mods=1;
+      }
+      // Rest on the last board
+      const rest=sorted.slice(b-1);
+      const lastBoard=boards[b-1];
+      for(const it of rest){
+        if(lastBoard.mods>=mc){ok=false;break;}
+        lastBoard.items.push({...it,mods:1});lastBoard.mods++;
+      }
+    }else{
+      // Round-robin / similar / greedy / random / partition: assign each item
+      for(const it of sorted){
+        if(strategy==='roundrobin'){
+          const bi=t%boards.length;
+          if(boards[bi].mods>=mc){ok=false;break;}
+          boards[bi].items.push({...it,mods:1});boards[bi].mods++;
+        }else if(strategy==='partition'){
+          const avail=boards.map((_,j)=>({j,r:mc-boards[j].mods})).filter(b=>b.r>=1);
+          if(!avail.length){ok=false;break;}
+          const pick=avail[Math.floor(Math.random()*avail.length)].j;
+          boards[pick].items.push({...it,mods:1});boards[pick].mods++;
+        }else{
+          // greedy/similar/random: pick board with most remaining modules
+          let bi=-1,bestRemain=-1;
+          for(let j=0;j<b;j++){const r=mc-boards[j].mods;if(r>=1&&r>bestRemain){bestRemain=r;bi=j;}}
+          if(bi===-1){ok=false;break;}
+          boards[bi].items.push({...it,mods:1});boards[bi].mods++;
+        }
+      }
+    }
+    if(!ok)continue;
+
+    // Phase 2: redistribute modules to reduce max sheets per board
+    for(const board of boards){
+      if(!board.items.length)continue;
+      for(let iter2=0;iter2<mc;iter2++){
+        if(board.mods>=mc)break;
+        let bestIt=null,bestMax=Infinity;
+        const curMax=Math.max(...board.items.map(i=>Math.ceil(i.qty/(i.mods||1))));
+        for(const it of board.items){
+          const newSheets=Math.ceil(it.qty/(it.mods+1));
+          const newMax=Math.max(newSheets,...board.items.filter(i=>i!==it).map(i=>Math.ceil(i.qty/(i.mods||1))));
+          if(newMax<bestMax){bestMax=newMax;bestIt=it;}
+        }
+        if(bestIt&&bestMax<curMax){bestIt.mods+=1;board.mods++;}
+        else break;
+      }
+    }
+    // Phase 3: Fill ALL remaining empty slots (only when mustFill=true)
+    if(mustFill){
+    for(const board of boards){
+      if(!board.items.length)continue;
+      while(board.mods<mc){
+        // Give to item with smallest current mods (balances the waste)
+        board.items.sort((a,b)=>(a.mods||1)-(b.mods||1));
+        board.items[0].mods=(board.items[0].mods||1)+1;
+        board.mods++;
+      }
+    }
+    }
+    // Phase 4: Swap items between boards to reduce total sheets
+    if(b>1){
+      let improved=true,swaps=0;
+      while(improved&&swaps<200){
+        improved=false;
+        for(let bi=0;bi<b&&!improved;bi++){
+          if(!boards[bi].items.length)continue;
+          for(let si=0;si<boards[bi].items.length&&!improved;si++){
+            const item=boards[bi].items[si];
+            for(let bj=0;bj<b&&!improved;bj++){
+              if(bj===bi||boards[bj].mods>=mc)continue;
+              // Try moving item from bi to bj
+              boards[bi].items.splice(si,1);boards[bi].mods-=(item.mods||1);
+              boards[bj].items.push({...item});boards[bj].mods+=(item.mods||1);
+              // Calculate new total sheets
+              let newSheets=0;
+              for(const board of boards){
+                if(!board.items.length)continue;
+                const s=Math.ceil(Math.max(...board.items.map(i=>i.qty/(i.mods||1))));
+                newSheets+=s||0;
+              }
+              if(newSheets<bs-0.001&&boards[bi].mods>=0&&boards[bj].mods<=mc){
+                bs=newSheets;improved=true;si=boards[bi].items.length;
+              }else{
+                // Revert
+                boards[bj].items.pop();boards[bj].mods-=(item.mods||1);
+                boards[bi].items.splice(si,0,item);boards[bi].mods+=(item.mods||1);
+              }
+            }
+          }
+        }
+        swaps++;
+      }
+    }
+    // Calculate + safety constraint (never under-produce)
+    let ts=0,tw=0;
+    for(const board of boards){
+      if(!board.items.length)continue;
+      board.sheets=Math.ceil(Math.max(...board.items.map(i=>i.qty/(i.mods||1))));
+      if(!board.sheets||isNaN(board.sheets)){ok=false;break;}
+      // Safety: ensure every item gets enough
+      for(const it of board.items){
+        let produced=board.sheets*(it.mods||1);
+        if(produced<it.qty){
+          // Not enough! Increase sheets until satisfied
+          const extra=Math.ceil((it.qty-produced)/(it.mods||1));
+          board.sheets+=extra;
+        }
+      }
+      // Recalculate after safety fix
+      ts+=board.sheets;
+      for(const it of board.items)tw+=board.sheets*(it.mods||1)-it.qty;
+    }
+    if(!ok)continue;
+    if(ts<bs||(ts===bs&&tw<bw)){bs=ts;bw=tw;
+      best={boardCount:b,boards:boards.map(bb=>({
+        items:bb.items.map(i=>({id:i.id,name:i.name,qty:i.qty,mods:i.mods||1})),
+        mods:mc,sheets:bb.sheets||0,
+        waste:bb.items.reduce((s,i)=>s+(bb.sheets*(i.mods||1)-i.qty),0),
+        utilization:bb.sheets?(bb.items.reduce((s,i)=>s+i.qty,0)/(bb.sheets*bb.mods))*100:0
+      })),totalSheets:bs,totalWaste:bw,utilization:((1-bw/(bs*mc))*100),
+        totalCost:Math.round((b*boardCost+bs*sheetCost)*100)/100,feasible:true};
+    }
+  }
+  if(!best)return {boardCount:b,boards:[],totalSheets:0,totalWaste:0,utilization:0,feasible:false};
+  return best;
+}
+
+// ===== RENDER =====
+function renderKPI(){
+  if(!solutions.length||activeSol>=solutions.length){['kpiSheets','kpiOutput','kpiWasteRate','kpiBoards'].forEach(id=>document.getElementById(id).textContent='—');return;}
+  const s=solutions[activeSol],used=s.boards.filter(b=>b.items.length>0).length;
+  // Use actual used modules (sum of item.mods) instead of mc for accurate output when mustFill=false
+  const actualMods=s.boards.filter(b=>b.items.length>0).reduce((sum,b)=>sum+b.items.reduce((s,i)=>s+(i.mods||1),0),0);
+  const totalOutput=s.boards.filter(b=>b.items.length>0).reduce((sum,b)=>sum+b.sheets*b.items.reduce((s,i)=>s+(i.mods||1),0),0);
+  const totalNeeded=s.boards.filter(b=>b.items.length>0).reduce((sum,b)=>sum+b.items.reduce((s,i)=>s+i.qty,0),0);
+  const wasteRate=totalOutput>0?((totalOutput-totalNeeded)/totalOutput*100):0;
+  document.getElementById('kpiSheets').textContent=s.totalSheets.toLocaleString();
+  document.getElementById('kpiOutput').textContent=totalOutput.toLocaleString();
+  document.getElementById('kpiWasteRate').textContent=wasteRate.toFixed(1)+'%';
+  document.getElementById('kpiBoards').textContent=used+'/'+s.boardCount;
+}
+
+// ===== RENDER CENTER (top row small cards + bottom large card) =====
+const cL=['分1版','分2版','分3版','分4版'];let animating=false;
+
+function renderCenter(){
+  const st=document.getElementById('solutionStage');
+  if(!solutions.length||activeSol>=solutions.length){st.innerHTML='<div class="sol-stage" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted)"><div style="text-align:center"><div style="font-size:48px;margin-bottom:8px;opacity:0.4">📐</div><div style="font-size:13px">输入款号后点"计算最优方案"</div><div style="font-size:10px;margin-top:4px;opacity:0.6">自动分析 1–4 版拼版策略</div></div></div>';return;}
+  const main=solutions[activeSol];
+  let h='<div class="sol-stage">';
+  // Top row
+  h+='<div class="sol-row">';
+  for(let b=1;b<=4;b++){
+    const sol=solutions.find(s=>s.boards.filter(bb=>bb.items.length>0).length===b);
+    if(sol){
+      const used=sol.boards.filter(x=>x.items.length>0).length;
+      const isActive=used===main.boards.filter(x=>x.items.length>0).length;
+      h+='<div class="sol-card'+(isActive?' active':'')+'" data-b="'+b+'" onclick="switchSolByBoards('+b+')">';
+      h+='<div class="sc-badge'+(isActive?' g':' g')+'">'+(isActive?'当前':cL[b-1].replace('分','')+'版')+'</div>';
+      const tOut=sol.boards.filter(b=>b.items.length>0).reduce((sum,b)=>sum+b.sheets*b.mods,0);
+      const tNeed=sol.boards.filter(b=>b.items.length>0).reduce((sum,b)=>sum+b.items.reduce((s,i)=>s+i.qty,0),0);
+      const wRate=tOut>0?((tOut-tNeed)/tOut*100):0;
+      h+='<div class="sc-header"><div class="sc-title">'+cL[b-1]+'方案</div><div class="sc-sub"><b>'+sol.totalSheets.toLocaleString()+'</b> 张 · <b>'+tOut.toLocaleString()+'</b> 产出 · <b style="color:'+wasteColor(wRate)+'">'+wRate.toFixed(1)+'%</b></div></div>';
+      h+='</div>';
+    }else{
+      h+='<div class="sol-card empty"><div class="sc-header"><div class="sc-title">'+cL[b-1]+'方案</div><div class="sc-sub" style="color:var(--red)">不可行</div></div></div>';
+    }
+  }
+  h+='</div>';
+  // Bottom large card
+  h+='<div class="sol-expand"><div class="sol-main" id="solMainCard">';
+  const u=main.boards.filter(x=>x.items.length>0).length;
+  const totalMod=u*moduleCount;
+  const totalOutput=main.boards.filter(b=>b.items.length>0).reduce((sum,b)=>sum+b.sheets*b.mods,0);
+  const totalNeeded=main.boards.filter(b=>b.items.length>0).reduce((sum,b)=>sum+b.items.reduce((s,i)=>s+i.qty,0),0);
+  const wasteRate=totalOutput>0?((totalOutput-totalNeeded)/totalOutput*100):0;
+  h+='<div class="sm-head"><div class="sm-title">'+cL[u-1]+'方案</div><div class="sm-meta"><b>'+main.totalSheets.toLocaleString()+'</b> 印张 · <b style="color:var(--purple)">'+totalOutput.toLocaleString()+'</b> 产出 · 浪费率 <b style="color:'+wasteColor(wasteRate)+'">'+wasteRate.toFixed(1)+'%</b></div></div>';
+  h+='<div class="sm-boards">';
+  main.boards.filter(x=>x.items.length>0).forEach((b,bi)=>{
+    const usedMods=b.items.reduce((s,i)=>s+(i.mods||1),0);
+    const emptyMods=b.mods-usedMods;
+    const totalOutput=b.sheets*usedMods;
+    const totalOverflow=totalOutput-b.items.reduce((s,i)=>s+i.qty,0);
+    const totalRate=totalOutput>0?(totalOverflow/totalOutput*100):0;
+    h+='<div class="sc-board">';
+    h+='<div class="scb-h" style="background:linear-gradient(135deg,rgba(139,111,232,0.08),rgba(232,123,160,0.08));padding:14px 20px;border-radius:10px;margin-bottom:14px"><div class="scb-name"><div class="scb-dot" style="background:'+boardColors[bi%4]+';color:'+boardColors[bi%4]+'"></div>第'+(bi+1)+'版</div><div style="display:flex;align-items:center;gap:20px"><div style="font-size:18px;font-weight:700;color:var(--ink);font-family:var(--mono)"><small style="font-size:11px;color:var(--ink2);font-weight:500;margin-right:3px">总</small>'+b.mods+'<small style="font-size:11px;color:var(--ink2);font-weight:500;margin-left:2px">/ 已</small>'+usedMods+'<small style="font-size:11px;color:var(--ink2);font-weight:500;margin-left:2px">/ 空</small><span style="color:'+(emptyMods>0?'var(--coral)':'var(--green)')+'">'+emptyMods+'</span></div><div style="font-size:18px;font-weight:700;color:var(--ink);font-family:var(--mono)"><small style="font-size:11px;color:var(--ink2);font-weight:500;margin-right:3px">印刷</small>'+b.sheets.toLocaleString()+'<small style="font-size:11px;color:var(--ink2);font-weight:500;margin-left:2px">张</small></div><div style="font-size:18px;font-weight:700;color:var(--purple);font-family:var(--mono)">'+totalOutput.toLocaleString()+'<small style="font-size:11px;color:var(--ink2);font-weight:500;margin-left:3px">产出</small></div><div style="font-size:18px;font-weight:700;color:'+wasteColor(totalRate)+';font-family:var(--mono)">'+totalOverflow+'<small style="font-size:11px;color:var(--ink2);font-weight:500;margin-left:3px">溢出</small></div></div></div>';
+    h+='<div class="scb-table">';
+    // Header row
+    h+='<div class="scb-th">款号</div><div class="scb-th">每款模数</div><div class="scb-th">产出</div><div class="scb-th">溢出</div>';
+    // Data rows
+    sortByName(b.items).forEach(it=>{
+      const output=b.sheets*(it.mods||1);
+      const overflow=output-it.qty;
+      const rate=it.qty>0?(overflow/it.qty*100):0;
+      h+='<div class="scb-row"><div>'+it.name+' <span style="color:var(--muted);font-weight:400;font-size:12px">需'+it.qty.toLocaleString()+'</span></div><div><span style="color:var(--ink2);font-size:11px">每款</span><b style="color:var(--ink);margin-left:4px">'+it.mods+'</b><span style="color:var(--ink2);font-size:11px;margin-left:2px">模</span></div><div style="color:var(--ink);font-weight:600">'+output.toLocaleString()+'</div><div style="color:'+wasteColor(rate)+';font-weight:600">'+overflow+'</div></div>';
+    });
+    h+='</div></div>';
+  });
+  h+='</div></div></div></div>';
+  st.innerHTML=h;
+}
+
+function wasteColor(rate){if(rate<=5)return 'var(--green)';if(rate<=15)return 'var(--coral)';return 'var(--red)';}
+function sortByName(items){
+  return [...items].sort((a,b)=>{
+    const ma=a.name&&a.name.match(/^款(\d+)$/);
+    const mb=b.name&&b.name.match(/^款(\d+)$/);
+    if(ma&&mb)return parseInt(ma[1])-parseInt(mb[1]);
+    if(ma)return -1;if(mb)return 1;
+    return 0;
+  });
+}
+function switchSolByBoards(b){
+  if(animating)return;
+  const idx=solutions.findIndex(s=>s.boards.filter(bb=>bb.items.length>0).length===b);
+  if(idx<0||idx===activeSol)return;
+  animating=true;
+  activeSol=idx;renderKPI();renderRight();
+  renderCenter();
+  setTimeout(()=>{animating=false;},450);
+}
+
+function renderRight(){
+  if(!solutions.length||activeSol>=solutions.length)return;
+  // Tabs
+  const tabs=document.getElementById('solTabs');
+  let th='';
+  for(let b=1;b<=4;b++){
+    const sol=solutions.find(s=>s.boards.filter(bb=>bb.items.length>0).length===b);
+    if(sol)th+='<div class="sol-tab'+(b===solutions[activeSol].boards.filter(bb=>bb.items.length>0).length?' active':'')+'" onclick="switchSolByBoards('+b+')">'+b+'版<span class="sb g">'+sol.utilization.toFixed(1)+'%</span></div>';
+    else th+='<div class="sol-tab">'+b+'版<span class="sb bd">×</span></div>';
+  }
+  tabs.innerHTML=th;
+  // Board list
+  const s=solutions[activeSol],lb=document.getElementById('solBoardList');
+  let lh='';
+  s.boards.filter(b=>b.items.length>0).forEach((b,bi)=>{
+    lh+='<div style="background:rgba(255,255,255,0.6);border-radius:10px;padding:10px;margin-bottom:6px;border:1px solid rgba(0,0,0,0.04);box-shadow:0 1px 3px rgba(0,0,0,0.03)">';
+    lh+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:600;font-size:11px;display:flex;align-items:center;gap:5px"><div style="width:6px;height:6px;border-radius:50%;background:'+boardColors[bi%4]+'"></div>第'+(bi+1)+'版</div><div style="font-size:9px;color:var(--muted);font-family:var(--mono)">'+b.sheets.toLocaleString()+'张</div></div>';
+    lh+='<div style="display:flex;gap:12px;font-size:9px;color:var(--ink2);margin-bottom:4px"><span>浪费 <b style="color:var(--red);display:block;font-family:var(--mono);font-size:10px">'+b.waste.toLocaleString()+'</b></span><span>利用率 <b style="color:var(--green);display:block;font-family:var(--mono);font-size:10px">'+b.utilization.toFixed(1)+'%</b></span></div>';
+    lh+='<div style="font-size:9px;font-family:var(--mono);color:var(--ink2);line-height:1.4">';
+    sortByName(b.items).forEach(it=>{lh+=it.name+' <b style="color:var(--ink)">'+it.qty.toLocaleString()+'</b> ×'+it.mods+'模 &nbsp;';});
+    lh+='</div></div>';
+  });
+  lb.innerHTML=lh||'<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px">无版位数据</div>';
+  // Insights
+  const ins=document.getElementById('insights');
+  const cu=solutions[activeSol],used=cu.boards.filter(b=>b.items.length>0).length;
+  const minB=solutions.map(s=>s.boards.filter(bb=>bb.items.length>0).length).sort((a,b)=>a-b)[0];
+  const maxU=Math.max(...solutions.map(s=>s.utilization));
+  // Find the truly best solution (minimum total cost)
+  const best=solutions.reduce((a,b)=>{
+    const ca=a.boards.filter(bb=>bb.items.length>0).length*boardCost+a.totalSheets*sheetCost;
+    const cb=b.boards.filter(bb=>bb.items.length>0).length*boardCost+b.totalSheets*sheetCost;
+    return ca<cb?a:b;
+  }, solutions[0]);
+  const bestUsed=best.boards.filter(b=>b.items.length>0).length;
+  const bestCost=bestUsed*boardCost+best.totalSheets*sheetCost;
+  let ih='<div class="ins"><div class="ins-i p">⚡</div><div><div class="ins-t">分 '+bestUsed+' 版最省钱</div><div class="ins-s">印张 '+best.totalSheets.toLocaleString()+' · 产出 '+best.boards.filter(b=>b.items.length>0).reduce((s,b)=>s+b.sheets*b.mods,0).toLocaleString()+'</div></div></div>';
+  ih+='<div class="ins"><div class="ins-i r">📐</div><div><div class="ins-t">最少需分 '+minB+' 版</div><div class="ins-s">模数限制为每版 '+moduleCount+' 模</div></div></div>';
+  if(maxU>0)ih+='<div class="ins"><div class="ins-i b">📈</div><div><div class="ins-t">最高利用率 '+maxU.toFixed(1)+'%</div><div class="ins-s">在方案列表中选择查看</div></div></div>';
+  ins.innerHTML=ih;
+}
+
+// ===== EXPORT =====
+function exportExcel(){
+  if(!solutions.length){toast('请先计算再导出');return;}
+  const s=solutions[activeSol],used=s.boards.filter(b=>b.items.length>0);
+  const rows=[['版号','款号','订单数量','模数','印刷张数','印刷数量','浪费数量','利用率']];
+  used.forEach((b,bi)=>{
+    sortByName(b.items).forEach(it=>{
+      rows.push(['第'+(bi+1)+'版',it.name,it.qty,it.mods,b.sheets,b.sheets*it.mods,b.sheets*it.mods-it.qty,b.utilization.toFixed(1)+'%']);
+    });
+    rows.push(['','小计','',''+b.mods+'模',b.sheets,'',b.waste,b.utilization.toFixed(1)+'%']);
+  });
+  rows.push(['','总计','','',''+s.totalSheets,'',s.totalWaste,s.utilization.toFixed(1)+'%']);
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'拼版明细');
+  XLSX.writeFile(wb,'锦鲤拼版助手_拼版明细.xlsx');toast('Excel 已导出');
+}
+function exportPDF(){window.print();toast('PDF 打印已打开');}
+
+// ===== PERSISTENCE =====
+const SK='koi_imposition_v6';
+function save(){
+  const data={items:items.map(i=>({name:i.name,qty:i.qty})),moduleCount,iterations,mustFill,solutions,activeSol};
+  try{localStorage.setItem(SK,JSON.stringify(data));}catch(e){}
+}
+function load(){
+  try{const d=JSON.parse(localStorage.getItem(SK));if(!d)return;
+    items=d.items||[];moduleCount=d.moduleCount||3;iterations=d.iterations||1000;mustFill=d.mustFill!==false;solutions=d.solutions||[];activeSol=d.activeSol||0;
+    if(activeSol>=solutions.length)activeSol=solutions.length>0?0:0;
+    document.getElementById('modCount').value=moduleCount;
+    document.getElementById('iters').value=iterations;
+    setFill(mustFill);
+  }catch(e){}
+}
+
+// ===== INIT =====
+load();
+if(!items.length){items=[{name:'款1',qty:''}];}
+renderItems();
+if(solutions.length){renderKPI();renderCenter();renderRight();}
+// Auto focus first qty field on first load
+setTimeout(()=>{const f=document.querySelector('#itemList .qt');if(f)f.focus();},100);
+</script>
+</body>
+</html>
